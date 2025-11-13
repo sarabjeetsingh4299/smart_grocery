@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Smart Grocery Planner — Pro (Improved UI + Dark Mode)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    /* Theme variables */
+    :root{
+      --bg: #f8fbff;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #6b7280;
+      --brand: #2b6ef6;
+      --glass: rgba(255,255,255,0.7);
+    }
+    [data-theme="dark"]{
+      --bg: #0b1220;
+      --card: #071126;
+      --text: #e6eef8;
+      --muted: #9aa6b2;
+      --brand: #3b82f6;
+      --glass: rgba(255,255,255,0.03);
+    }
+
+    html,body{height:100%}
+    body{
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+      background: linear-gradient(180deg,var(--bg), #e9f0ff 40%);
+      color: var(--text);
+      padding: 20px;
+      transition: background .25s, color .25s;
+    }
+    .app{max-width:1100px;margin:0 auto}
+    .card{
+      border-radius:12px;
+      box-shadow: 0 10px 30px rgba(17,24,39,0.06);
+      background: var(--card);
+      color: var(--text);
+    }
+    .btn-primary{background:linear-gradient(90deg,var(--brand),#1f52d7);border:none}
+    .small-muted{color:var(--muted);font-size:.9rem}
+    .progress{height:18px;border-radius:12px;overflow:hidden}
+    table td, table th{vertical-align:middle}
+    .purchased { text-decoration: line-through; opacity: .6; }
+    @media (max-width:768px){
+      .d-sm-flex{flex-direction:column!important}
+      .action-row{gap:.5rem}
+      .table-responsive{font-size:.95rem}
+    }
+    /* Toast container position */
+    #toastContainer { position: fixed; right: 16px; bottom: 16px; z-index: 1200; max-width: 360px; }
+    /* Confirm modal small tweaks */
+    .confirm-body { font-size: 1rem; }
+    /* Dark mode toggle */
+    .theme-toggle { cursor: pointer; }
+    /* Improve button spacing on small screens */
+    .action-btns .btn { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card p-4">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+          <h4 class="mb-0">Smart Grocery Planner</h4>
+          <div class="small-muted">Add items, send to WhatsApp, print/export.</div>
+        </div>
+        <div class="text-end d-flex align-items-center gap-2">
+          
+          <button id="themeToggle" class="btn btn-sm btn-outline-secondary theme-toggle" title="Toggle dark mode">
+            <i id="themeIcon" class="bi bi-moon"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- input row -->
+      <div class="row g-2 align-items-center mb-3">
+        <div class="col-md-5">
+          <input id="name" class="form-control form-control-lg" placeholder="Item name (eg. Milk)">
+        </div>
+        <div class="col-md-2">
+          <input id="qty" type="number" min="1" class="form-control form-control-lg" placeholder="Qty">
+        </div>
+        <div class="col-md-2">
+          <input id="price" type="number" min="0" step="0.01" class="form-control form-control-lg" placeholder="Price ₹">
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+          <button id="addBtn" class="btn btn-primary btn-lg w-100"><i class="bi bi-plus-lg me-2"></i>Add Item</button>
+        </div>
+      </div>
+
+      <div class="row mb-3 align-items-center action-row">
+        <div class="col-md-8 d-flex flex-wrap gap-2 align-items-center action-btns">
+          <button id="voiceBtn" class="btn btn-outline-secondary"><i class="bi bi-mic-fill me-1"></i>Voice Input</button>
+          <button id="clearBtn" class="btn btn-outline-danger"><i class="bi bi-trash me-1"></i>Clear All</button>
+
+          <div class="vr d-none d-md-block mx-2"></div>
+
+          <button id="copyBtn" class="btn btn-outline-primary"><i class="bi bi-clipboard me-1"></i>Copy List</button>
+          <button id="shareApiBtn" class="btn btn-outline-success d-none d-md-inline"><i class="bi bi-share-fill me-1"></i>Share (Mobile)</button>
+
+          <button id="printBtn" class="btn btn-outline-secondary"><i class="bi bi-printer me-1"></i>Print / Save PDF</button>
+        </div>
+
+        <div class="col-md-4 text-md-end mt-2 mt-md-0">
+          <div class="d-inline-block text-muted me-2">Budget</div>
+          <input id="budget" type="number" min="0" step="0.01" style="width:160px" class="form-control d-inline-block">
+        </div>
+      </div>
+
+      <div class="row mb-3 align-items-center">
+        <div class="col-md-6 mb-2">
+          <input id="filter" class="form-control" placeholder="Search items...">
+        </div>
+        <div class="col-md-6 text-md-end">
+          <button id="findShops" class="btn btn-outline-info"><i class="bi bi-shop me-1"></i>Find Nearby Grocery Shops</button>
+          <button id="waSelectBtn" class="btn btn-success"><i class="bi bi-whatsapp me-1"></i>Share to WhatsApp</button>
+          <!-- <button id="manageOwnersBtn" class="btn btn-outline-primary"><i class="bi bi-people me-1"></i>Manage Owners</button> -->
+        </div>
+      </div>
+
+      <div class="row mb-3">
+        <div class="col-md-8">
+          <div class="progress mb-2"><div id="budgetBar" class="progress-bar" style="width:0%">0%</div></div>
+          <div class="small-muted">Spent: ₹<span id="spent">0.00</span> • Budget: ₹<span id="budgetShow">0.00</span> • Items: <span id="count">0</span></div>
+        </div>
+        <div class="col-md-4 text-md-end">
+          <button id="exportCsv" class="btn btn-outline-primary me-2"><i class="bi bi-download me-1"></i>Export CSV</button>
+          <button id="saveBtn" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save</button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr><th>Item</th><th style="width:110px">Qty</th><th style="width:140px">Price</th><th style="width:140px">Total</th><th style="width:120px"></th></tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Confirm Modal -->
+  <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-body confirm-body" id="confirmMessage">Are you sure?</div>
+        <div class="modal-footer">
+          <button id="confirmCancel" type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button id="confirmOk" type="button" class="btn btn-danger">Yes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WhatsApp modal (unchanged) -->
+  <div class="modal fade" id="waModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Share via WhatsApp</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Send method</label>
+          <select id="waMethod" class="form-select mb-2">
+            <option value="open">Open WhatsApp Web — choose contact</option>
+            <option value="number">Send directly to phone number</option>
+          </select>
+
+          <div id="waNumberWrap" class="mb-2 d-none">
+            <label class="form-label">Phone number (country code + number, no `+`)</label>
+            <input id="waNumber" class="form-control" placeholder="e.g. 919876543210">
+            <div class="form-text">Enter digits only, e.g. <code>919876543210</code></div>
+          </div>
+<!-- 
+          <div class="mb-2">
+            <label class="form-label">Send to saved owner</label>
+            <select id="waOwnerSelect" class="form-select">
+              <option value="">— choose owner (optional) —</option>
+            </select>
+          </div> -->
+
+          <div class="mb-2">
+            <label class="form-label">Add a short message (optional)</label>
+            <input id="waNote" class="form-control" placeholder="Hi, here's my grocery list...">
+          </div>
+
+          <div class="form-check mb-1">
+            <input id="waIncludePurchased" class="form-check-input" type="checkbox" checked>
+            <label class="form-check-label" for="waIncludePurchased">Include purchased items</label>
+          </div>
+
+          <div class="form-check">
+            <input id="waShort" class="form-check-input" type="checkbox">
+            <label class="form-check-label" for="waShort">Send short list (name & qty only)</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="waSendBtn" class="btn btn-success"><i class="bi bi-send me-1"></i>Send</button>
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shop owners management modal -->
+  <div class="modal fade" id="ownersModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Manage Shop Owners</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="ownersList" class="mb-3"></div>
+
+          <div class="mb-2">
+            <input id="ownerName" class="form-control mb-1" placeholder="Owner / Shop name">
+            <input id="ownerNumber" class="form-control" placeholder="Phone (country code + number, no +)">
+            <div class="form-text">Example: 919876543210</div>
+          </div>
+          <div class="d-flex gap-2">
+            <button id="ownerAddBtn" class="btn btn-primary w-100"><i class="bi bi-plus-lg me-1"></i>Add</button>
+            <button id="ownerClearBtn" class="btn btn-outline-secondary w-100">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // storage keys and data
+  const KEY = 'smart_grocery_v5';
+  const OWNERS_KEY = 'owners_v1';
+  let list = JSON.parse(localStorage.getItem(KEY) || '[]');
+  let owners = JSON.parse(localStorage.getItem(OWNERS_KEY) || '[]');
+
+  // UI refs
+  const tableBody = document.getElementById('tableBody');
+  const spentEl = document.getElementById('spent');
+  const budgetShow = document.getElementById('budgetShow');
+  const budgetBar = document.getElementById('budgetBar');
+  const countEl = document.getElementById('count');
+  const filterEl = document.getElementById('filter');
+
+  // Bootstrap modal instances
+  let waModalInstance = null, ownersModalInstance = null;
+  function getWaModal(){ if(!waModalInstance) waModalInstance = new bootstrap.Modal(document.getElementById('waModal')); return waModalInstance; }
+  function getOwnersModal(){ if(!ownersModalInstance) ownersModalInstance = new bootstrap.Modal(document.getElementById('ownersModal')); return ownersModalInstance; }
+
+  // Toast helper
+  function showToast(message, variant = 'secondary', ttl = 3000) {
+    const id = 't' + Date.now();
+    const toastHTML = `
+      <div id="${id}" class="toast align-items-center text-bg-${variant} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+          <div class="toast-body">${message}</div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+      </div>`;
+    const container = document.getElementById('toastContainer');
+    container.insertAdjacentHTML('beforeend', toastHTML);
+    const el = document.getElementById(id);
+    const toast = new bootstrap.Toast(el, { delay: ttl });
+    toast.show();
+    // remove from DOM when hidden
+    el.addEventListener('hidden.bs.toast', ()=> el.remove());
+  }
+
+  // Confirm modal helper - returns Promise<boolean>
+  function confirmAsync(message) {
+    return new Promise((resolve) => {
+      const modalEl = document.getElementById('confirmModal');
+      const msgEl = document.getElementById('confirmMessage');
+      const okBtn = document.getElementById('confirmOk');
+      const cancelBtn = document.getElementById('confirmCancel');
+      msgEl.textContent = message;
+      const modal = new bootstrap.Modal(modalEl);
+      // cleanup handlers after action
+      const done = (val) => {
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        modal.hide();
+        resolve(val);
+      };
+      const onOk = () => done(true);
+      const onCancel = () => done(false);
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      modal.show();
+    });
+  }
+
+  // render function (recomputes spent and updates bar)
+  function render() {
+    const filter = filterEl.value.trim().toLowerCase();
+    tableBody.innerHTML = '';
+    let spent = 0, totalItems = 0;
+    list.forEach((it, i) => {
+      if (filter && !it.name.toLowerCase().includes(filter)) return;
+      const qty = Number(it.qty) || 0;
+      const price = Number(it.price) || 0;
+      const tot = qty * price;
+      spent += tot;
+      totalItems += 1;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="${it.purchased ? 'purchased' : ''}">${escapeHtml(it.name)}</td>
+        <td>${qty}</td>
+        <td>₹${price.toFixed(2)}</td>
+        <td>₹${tot.toFixed(2)}</td>
+        <td>
+          <div class="d-flex gap-2 justify-content-end">
+            <button class="btn btn-sm btn-outline-secondary" onclick="editItem(${i})"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-sm btn-outline-success" onclick="togglePurchased(${i})" title="Toggle purchased"><i class="bi bi-check2-square"></i></button>
+            <button class="btn btn-sm btn-outline-danger" onclick="removeItem(${i})"><i class="bi bi-trash"></i></button>
+          </div>
+        </td>`;
+      tableBody.appendChild(tr);
+    });
+
+    const budget = Number(document.getElementById('budget').value) || 0;
+    spentEl.textContent = spent.toFixed(2);
+    budgetShow.textContent = budget.toFixed(2);
+    const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+    budgetBar.style.width = pct + '%';
+    budgetBar.textContent = Math.round(pct) + '%';
+    budgetBar.className = 'progress-bar ' + (pct > 90 ? 'bg-danger' : pct > 70 ? 'bg-warning' : 'bg-success');
+
+    countEl.textContent = totalItems;
+    localStorage.setItem(KEY, JSON.stringify(list));
+  }
+
+  function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+  // CRUD operations (use confirmAsync and showToast)
+  async function removeItem(i){
+    const ok = await confirmAsync('Remove this item?');
+    if(!ok) return;
+    list.splice(i,1);
+    render();
+    showToast('Item removed', 'secondary');
+  }
+
+  function editItem(i){
+    const it = list[i];
+    const newName = prompt('Item name', it.name); // small inline prompt acceptable for quick edit
+    if(newName===null) return;
+    const newQty = prompt('Quantity', it.qty);
+    if(newQty===null) return;
+    const newPrice = prompt('Price', it.price);
+    if(newPrice===null) return;
+    list[i] = { name: newName, qty: Number(newQty)||1, price: Number(newPrice)||0, purchased: !!it.purchased };
+    render();
+    showToast('Item updated', 'secondary');
+  }
+  function togglePurchased(i){ list[i].purchased = !list[i].purchased; render(); showToast(list[i].purchased ? 'Marked as purchased' : 'Marked as not purchased', 'secondary'); }
+
+  // add item
+  document.getElementById('addBtn').addEventListener('click', ()=> {
+    const name = document.getElementById('name').value.trim();
+    const qty = Number(document.getElementById('qty').value) || 1;
+    const price = Number(document.getElementById('price').value) || 0;
+    if(!name) { showToast('Enter item name', 'warning'); return; }
+    list.push({ name, qty, price, purchased: false });
+    document.getElementById('name').value=''; document.getElementById('qty').value=''; document.getElementById('price').value='';
+    render();
+    showToast('Item added', 'success');
+  });
+
+  // clear all
+  document.getElementById('clearBtn').addEventListener('click', async ()=> {
+    const ok = await confirmAsync('Clear all items? This cannot be undone.');
+    if(!ok) { showToast('Clear cancelled', 'secondary'); return; }
+    list = []; render();
+    showToast('All items cleared', 'success');
+  });
+
+  // ensure budget input updates progress bar immediately
+  document.getElementById('budget').addEventListener('input', render);
+
+  // keyboard Enter to add
+  ['name','qty','price'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('keydown', (e) => { if(e.key === 'Enter') document.getElementById('addBtn').click(); });
+  });
+
+  // voice input (simple)
+  if('webkitSpeechRecognition' in window){
+    const rec = new webkitSpeechRecognition();
+    rec.lang='en-US'; rec.continuous=false;
+    document.getElementById('voiceBtn').addEventListener('click', ()=>{
+      rec.start(); document.getElementById('voiceBtn').innerHTML = "<i class='bi bi-mic-fill text-danger'></i> Listening...";
+    });
+    rec.onresult = e => {
+      const t = e.results[0][0].transcript;
+      const parts = t.trim().split(' ');
+      const maybePrice = Number(parts[parts.length-1]);
+      const maybeQty = Number(parts[parts.length-2]);
+      let name, qty=1, price=0;
+      if(!isNaN(maybePrice) && !isNaN(maybeQty)){
+        name = parts.slice(0, parts.length-2).join(' ') || parts[0];
+        qty = maybeQty; price = maybePrice;
+      } else if(!isNaN(maybePrice)){
+        name = parts.slice(0, parts.length-1).join(' ') || parts[0];
+        price = maybePrice;
+      } else {
+        name = t;
+      }
+      document.getElementById('name').value = name;
+      document.getElementById('qty').value = qty;
+      document.getElementById('price').value = price;
+      document.getElementById('voiceBtn').innerHTML = "<i class='bi bi-mic'></i> Voice Input";
+      showToast('Voice input captured', 'secondary');
+    };
+    rec.onerror = ()=> { document.getElementById('voiceBtn').innerHTML = "<i class='bi bi-mic'></i> Voice Input"; showToast('Voice input error', 'warning'); };
+  } else { document.getElementById('voiceBtn').disabled=true; }
+
+  // save / export / csv
+  document.getElementById('saveBtn').addEventListener('click', ()=> {
+    localStorage.setItem(KEY, JSON.stringify(list));
+    showToast('Saved locally', 'success');
+  });
+
+  document.getElementById('exportCsv').addEventListener('click', ()=> {
+    if(list.length===0) { showToast('No items to export', 'warning'); return; }
+    let csv = 'Item,Qty,Price,Total\n';
+    list.forEach(it => csv += `"${it.name.replace(/"/g,'""')}",${it.qty},${it.price},${(it.qty*it.price).toFixed(2)}\n`);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'grocery.csv'; a.click(); URL.revokeObjectURL(url);
+    showToast('CSV exported', 'success');
+  });
+
+  // filter
+  filterEl.addEventListener('input', render);
+
+  // copy to clipboard
+  document.getElementById('copyBtn').addEventListener('click', async ()=>{
+    const text = buildListText({ includePurchased: true, includeNote: false, short: false });
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('List copied to clipboard', 'success');
+    } catch (e){
+      showToast('Copy failed — permission denied', 'warning');
+    }
+  });
+
+  // Web Share API (mobile)
+  const shareApiBtn = document.getElementById('shareApiBtn');
+  if (navigator.share) {
+    shareApiBtn.classList.remove('d-none');
+    shareApiBtn.addEventListener('click', async () => {
+      const noteVal = document.getElementById('waNote') ? document.getElementById('waNote').value.trim() : '';
+      const text = noteVal ? (noteVal + '\n\n' + buildListText({ includePurchased: true, includeNote: false, short:false })) : buildListText({ includePurchased: true, includeNote: false, short:false });
+      try {
+        await navigator.share({ title: 'Grocery List', text });
+        showToast('Shared via system share', 'success');
+      } catch (e) { showToast('Share cancelled', 'secondary'); }
+    });
+  }
+
+  // Build text
+  function buildListText({ includePurchased = true, includeNote = true, short = false }) {
+    let lines = [];
+    const note = includeNote ? (document.getElementById('waNote') ? document.getElementById('waNote').value.trim() : '') : '';
+    if(note) lines.push(note, '');
+    lines.push('Grocery List:');
+    lines.push('---------------------');
+    let total=0, count=0;
+    list.forEach(it => {
+      if(!includePurchased && it.purchased) return;
+      const qty = Number(it.qty) || 0;
+      const price = Number(it.price) || 0;
+      const tot = qty * price;
+      if(short) lines.push(`${it.name} — x${qty}`);
+      else lines.push(`${it.name} — x${qty} — ₹${price.toFixed(2)} (₹${tot.toFixed(2)})${it.purchased ? ' ✅' : ''}`);
+      total += tot;
+      count++;
+    });
+    lines.push('---------------------');
+    lines.push(`Items: ${count} • Total: ₹${total.toFixed(2)}`);
+    return lines.join('\n');
+  }
+
+  // WhatsApp modal open / send (validation replaced by toasts)
+  document.getElementById('waSelectBtn').addEventListener('click', ()=>{
+   
+    document.getElementById('waMethod').value = 'open';
+    document.getElementById('waNumberWrap').classList.add('d-none');
+    document.getElementById('waNumber').value = '';
+    document.getElementById('waNote').value = '';
+    document.getElementById('waIncludePurchased').checked = true;
+    document.getElementById('waShort').checked = false;
+    getWaModal().show();
+    document.getElementById('waMethod').onchange = () => {
+      const val = document.getElementById('waMethod').value;
+      document.getElementById('waNumberWrap').classList.toggle('d-none', val !== 'number');
+    };
+  });
+
+  document.getElementById('waSendBtn').addEventListener('click', ()=>{
+    const method = document.getElementById('waMethod').value;
+    let number = document.getElementById('waNumber').value.trim();
+    const note = document.getElementById('waNote').value.trim();
+    const includePurchased = document.getElementById('waIncludePurchased').checked;
+    const short = document.getElementById('waShort').checked;
+    // const ownerSel = document.getElementById('waOwnerSelect').value;
+    if(ownerSel){
+      const own = owners.find(o => o.id === ownerSel);
+      if(own) number = own.number;
+    }
+
+    const textBody = buildListText({ includePurchased, includeNote: false, short });
+    const finalText = note ? (note + '\n\n' + textBody) : textBody;
+    const encoded = encodeURIComponent(finalText);
+
+    if(method === 'open') {
+      const mobileUrl = `whatsapp://send?text=${encoded}`;
+      const webUrl = `https://web.whatsapp.com/send?text=${encoded}`;
+      window.location.href = mobileUrl;
+      setTimeout(()=> window.open(webUrl, '_blank'), 700);
+      getWaModal().hide();
+      showToast('Opening WhatsApp...', 'secondary');
+    } else {
+      if(!/^\d{7,15}$/.test(number)) { showToast('Enter a valid phone number (with country code)', 'warning'); return; }
+      const url = `https://wa.me/${number}?text=${encoded}`;
+      window.open(url, '_blank');
+      getWaModal().hide();
+      showToast('WhatsApp opened for number', 'secondary');
+    }
+  });
+
+  // Manage owners modal and functions
+//   document.getElementById('manageOwnersBtn').addEventListener('click', ()=>{
+//     refreshOwnersList();
+//     document.getElementById('ownerName').value = '';
+//     document.getElementById('ownerNumber').value = '';
+//     getOwnersModal().show();
+//   });
+
+//   function populateOwnersSelect(){
+//     const sel = document.getElementById('waOwnerSelect');
+//     sel.innerHTML = `<option value="">— choose owner (optional) —</option>`;
+//     owners.forEach(o => sel.insertAdjacentHTML('beforeend', `<option value="${o.id}">${escapeHtml(o.name)} — ${o.number}</option>`));
+//   }
+
+  function refreshOwnersList(){
+    const wrap = document.getElementById('ownersList'); wrap.innerHTML = '';
+    if(owners.length === 0) wrap.innerHTML = '<div class="small-muted">No owners saved yet.</div>';
+    owners.forEach(o => {
+      const div = document.createElement('div');
+      div.className = 'd-flex align-items-center justify-content-between mb-2';
+      div.innerHTML = `<div><strong>${escapeHtml(o.name)}</strong><div class="small-muted">${o.number}</div></div>
+        <div class="d-flex gap-1">
+          <button class="btn btn-sm btn-outline-secondary" onclick="editOwner('${o.id}')"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteOwner('${o.id}')"><i class="bi bi-trash"></i></button>
+        </div>`;
+      wrap.appendChild(div);
+    });
+  }
+
+  // add owner
+  document.getElementById('ownerAddBtn').addEventListener('click', ()=>{
+    const name = document.getElementById('ownerName').value.trim();
+    const number = document.getElementById('ownerNumber').value.trim();
+    if(!name || !/^\d{7,15}$/.test(number)) { showToast('Enter owner name and valid phone number', 'warning'); return; }
+    const id = 'o_' + Date.now();
+    owners.push({ id, name, number });
+    localStorage.setItem(OWNERS_KEY, JSON.stringify(owners));
+    document.getElementById('ownerName').value = '';
+    document.getElementById('ownerNumber').value = '';
+    refreshOwnersList(); 
+    showToast('Owner saved', 'success');
+  });
+
+  document.getElementById('ownerClearBtn').addEventListener('click', ()=>{
+    document.getElementById('ownerName').value = '';
+    document.getElementById('ownerNumber').value = '';
+  });
+
+  // expose edit/delete owners globally
+  window.editOwner = function(id){
+    const o = owners.find(x => x.id === id); if(!o) return;
+    const newName = prompt('Owner name', o.name); if(newName===null) return;
+    const newNumber = prompt('Phone (country code + number, no +)', o.number); if(newNumber===null) return;
+    if(!/^\d{7,15}$/.test(newNumber)) { showToast('Invalid phone number format', 'warning'); return; }
+    o.name = newName; o.number = newNumber;
+    localStorage.setItem(OWNERS_KEY, JSON.stringify(owners));
+    refreshOwnersList(); 
+    showToast('Owner updated', 'secondary');
+  };
+
+  window.deleteOwner = async function(id){
+    const ok = await confirmAsync('Delete this owner?');
+    if(!ok) { showToast('Delete cancelled', 'secondary'); return; }
+    owners = owners.filter(o => o.id !== id);
+    localStorage.setItem(OWNERS_KEY, JSON.stringify(owners));
+    refreshOwnersList(); 
+    showToast('Owner deleted', 'success');
+  };
+
+  // Find nearby grocery shops
+  document.getElementById('findShops').addEventListener('click', ()=> {
+    if(!navigator.geolocation) { window.open('https://www.google.com/maps/search/grocery+near+me', '_blank'); return; }
+    const opts = { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 };
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      const mapsUrl = `https://www.google.com/maps/search/grocery+near+me/@${lat},${lng},14z`;
+      window.open(mapsUrl, '_blank');
+    }, err => {
+      console.warn('Geolocation error:', err);
+      window.open('https://www.google.com/maps/search/grocery+near+me', '_blank');
+    }, opts);
+  });
+
+  // Print / Save PDF
+  document.getElementById('printBtn').addEventListener('click', ()=>{
+    const html = generatePrintHtml();
+    const w = window.open('', '_blank', 'width=800,height=900');
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    setTimeout(()=> { w.focus(); w.print(); }, 500);
+    showToast('Opening print preview...', 'secondary');
+  });
+
+  function generatePrintHtml(){
+    const title = 'Grocery List';
+    const css = `<style>
+      body{font-family: Arial, Helvetica, sans-serif; padding:20px; color:#111}
+      h2{margin-bottom:8px}
+      pre{white-space:pre-wrap}
+    </style>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>${css}</head><body>
+      <h2>${escapeHtml(title)}</h2>
+      <pre>${escapeHtml(buildListText({ includePurchased: true, includeNote: true }))}</pre>
+    </body></html>`;
+  }
+
+  // load saved owners + list + theme on startup
+  (function(){
+    const savedList = JSON.parse(localStorage.getItem(KEY)||'[]'); if(Array.isArray(savedList)) list = savedList;
+    const savedOwners = JSON.parse(localStorage.getItem(OWNERS_KEY)||'[]'); if(Array.isArray(savedOwners)) owners = savedOwners;
+    // theme
+    const theme = localStorage.getItem('theme') || 'light';
+    setTheme(theme);
+    render(); 
+  })();
+
+  // expose functions used by inline onclicks
+  window.editItem = editItem;
+  window.removeItem = removeItem;
+  window.togglePurchased = togglePurchased;
+
+  (function(){
+  const THEME_KEY = 'theme';
+  const btn = document.getElementById('themeToggle');
+  const icon = document.getElementById('themeIcon');
+
+  function applyTheme(theme) {
+    if (theme === 'dark') {
+      document.documentElement.setAttribute('data-theme','dark');
+      if (icon) icon.className = 'bi bi-sun';
+      if (btn) btn.title = 'Switch to light mode';
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      if (icon) icon.className = 'bi bi-moon';
+      if (btn) btn.title = 'Switch to dark mode';
+    }
+    try { localStorage.setItem(THEME_KEY, theme); } catch(e){ console.warn('Could not save theme', e); }
+    console.log('Theme applied:', theme);
+  }
+
+  // choose initial theme: saved -> prefers-color-scheme -> light
+  function initTheme() {
+    let saved = null;
+    try { saved = localStorage.getItem(THEME_KEY); } catch(e){ saved = null; }
+    if (saved === 'dark' || saved === 'light') { applyTheme(saved); return; }
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(prefersDark ? 'dark' : 'light');
+  }
+
+  // toggle handler
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+    // optional user feedback if showToast exists
+    if (typeof showToast === 'function') showToast('Theme updated', 'secondary');
+  }
+
+  // init now
+  initTheme();
+
+  // attach handler if button exists
+  if (btn) btn.addEventListener('click', toggleTheme);
+  else console.warn('Theme toggle button #themeToggle not found - toggle UI disabled');
+})();
+</script>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
